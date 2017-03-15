@@ -124,6 +124,47 @@ RCT_REMAP_METHOD(lookUpPlaceByID,
                                          }];
 }
 
+RCT_REMAP_METHOD(currentPlace, 
+                 resolver: (RCTPromiseResolveBlock)resolve
+                 rejecter: (RCTPromiseRejectBlock)reject)
+{
+
+    NSMutableArray *currentPlaceList = [NSMutableArray array];
+
+    [[GMSPlacesClient sharedClient] currentPlaceWithCallback:^(GMSPlaceLikelihoodList *likelihoodList, NSError *error) {
+                                             if (error != nil) {
+                                                 reject(@"E_CURRENT_PLACE_ERROR", [error localizedDescription], nil);
+                                                 return;
+                                             }
+
+                                             for (GMSPlaceLikelihood *likelihood in likelihoodList.likelihoods) {
+                                                 GMSPlace* place = likelihood.place;
+
+                                                NSMutableDictionary *placeData =[[NSMutableDictionary alloc] init];
+                                                 placeData[@"name"] = place.name;
+                                                 placeData[@"address"] = place.formattedAddress;
+                                                 placeData[@"attributions"] = place.attributions.string;
+                                                 placeData[@"latitude"] = [NSNumber numberWithDouble:place.coordinate.latitude];
+                                                 placeData[@"longitude"] = [NSNumber numberWithDouble:place.coordinate.longitude];
+                                                 placeData[@"phoneNumber"] = place.phoneNumber;
+                                                 placeData[@"website"] = place.website.absoluteString;
+                                                 placeData[@"placeID"] = place.placeID;
+                                                 placeData[@"types"] = place.types;
+                                                 
+                                                 NSMutableDictionary *addressComponents =[[NSMutableDictionary alloc] init];
+                                                 for( int i=0;i<place.addressComponents.count;i++) {
+                                                     addressComponents[place.addressComponents[i].type] = place.addressComponents[i].name;
+                                                 }
+                                                 placeData[@"addressComponents"] = addressComponents;
+
+
+                                                 [currentPlaceList addObject:placeData];
+                                             }
+                                             
+                                             resolve(currentPlaceList);
+                                         }];
+}
+
 
 - (NSError *) errorFromException: (NSException *) exception
 {

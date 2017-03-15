@@ -29,6 +29,8 @@ import com.google.android.gms.location.places.AutocompletePredictionBuffer;
 import com.google.android.gms.location.places.Place;
 import com.google.android.gms.location.places.PlaceBuffer;
 import com.google.android.gms.location.places.Places;
+import com.google.android.gms.location.places.PlaceLikelihood;
+import com.google.android.gms.location.places.PlaceLikelihoodBuffer;
 import com.google.android.gms.location.places.ui.PlaceAutocomplete;
 import com.google.android.gms.location.places.ui.PlacePicker;
 import com.google.android.gms.maps.model.LatLngBounds;
@@ -68,6 +70,7 @@ public class RNGooglePlacesModule extends ReactContextBaseJavaModule implements 
     protected synchronized void buildGoogleApiClient() {
         mGoogleApiClient = new GoogleApiClient.Builder(getReactApplicationContext())
             .addApi(Places.GEO_DATA_API)
+            .addApi(Places.PLACE_DETECTION_API)
             .addConnectionCallbacks(this)
             .addOnConnectionFailedListener(this)
             .build();
@@ -371,6 +374,65 @@ public class RNGooglePlacesModule extends ReactContextBaseJavaModule implements 
                     rejectPromise("E_PLACE_DETAILS_ERROR", new Error("Error making place lookup API call: " + places.getStatus().toString()));
                     return;
                 }
+            }
+        });
+    }
+
+
+    @ReactMethod
+    public void currentPlace(final Promise promise) {
+        this.pendingPromise = promise;
+
+        Places.PlaceDetectionApi.getCurrentPlace(mGoogleApiClient, null).setResultCallback(new ResultCallback<PlaceLikelihoodBuffer>() {
+            @Override
+            public void onResult(PlaceLikelihoodBuffer likelyPlaces) {
+
+
+                WritableArray placesList = Arguments.createArray();
+
+                for (PlaceLikelihood placeLikelihood : likelyPlaces) {
+                    Log.i(TAG, String.format("Place '%s' has likelihood: %g",
+                        placeLikelihood.getPlace().getName(),
+                        placeLikelihood.getLikelihood()));
+
+
+                    Place place = placeLikelihood.getPlace();
+
+                     // Display attributions if required.
+                    CharSequence attributions = place.getAttributions();
+
+                    WritableMap map = Arguments.createMap();
+
+                    map.putDouble("latitude", place.getLatLng().latitude);
+                    map.putDouble("longitude", place.getLatLng().longitude);
+                    map.putString("name", place.getName().toString());
+                    map.putString("address", place.getAddress().toString());
+
+                    if (!TextUtils.isEmpty(place.getPhoneNumber())) {
+                        map.putString("phoneNumber", place.getPhoneNumber().toString());
+                    }
+                    if (null != place.getWebsiteUri()) {
+                        map.putString("website", place.getWebsiteUri().toString());
+                    }
+                    map.putString("placeID", place.getId());
+                    if (!TextUtils.isEmpty(attributions)) {
+                        map.putString("attributions", attributions.toString());
+                    }
+
+                    if (place.getPlaceTypes() != null) {
+                        List<String> types = new ArrayList<>();
+                        for (Integer placeType : place.getPlaceTypes()) {
+                            types.add(findPlaceTypeLabelByPlaceTypeId(placeType));
+                        }
+                        map.putArray("types", Arguments.fromArray(types.toArray(new String[0])));
+                    }
+
+                    placesList.pushMap(map);
+
+                }
+
+                likelyPlaces.release();
+                resolvePromise(placesList);
             }
         });
     }
